@@ -1,164 +1,167 @@
-import { useState, useEffect } from 'react';
-import StudentAttendance from './StudentAttendance';
+import React, { useState } from 'react';
+import { Lock, UserPlus, LogIn, User, Hash } from 'lucide-react';
+import toast from 'react-hot-toast';
 
-const StudentAuth = () => {
+const StudentAuth = ({ onLoginSuccess }) => {
+    console.log("StudentAuth rendering"); // Debug log
+
     const [isLogin, setIsLogin] = useState(true);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
-    const [studentData, setStudentData] = useState(null);
-
     const [formData, setFormData] = useState({
-        name: '',
         roll_number: '',
-        password: ''
+        password: '',
+        name: ''
     });
-
-    useEffect(() => {
-        const storedStudentInfo = localStorage.getItem('studentInfo');
-        if (storedStudentInfo) {
-            setStudentData(JSON.parse(storedStudentInfo));
-        }
-    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        console.log("Form submitted", formData); // Debug log
         setLoading(true);
-        setError('');
-        setSuccess('');
-
-        const endpoint = isLogin
-            ? 'http://localhost:8000/student/login'
-            : 'http://localhost:8000/student/signup';
-
-        const payload = isLogin
-            ? { roll_number: formData.roll_number, password: formData.password }
-            : formData;
 
         try {
-            const response = await fetch(endpoint, {
+            const endpoint = isLogin ? '/token' : '/register/student';
+            console.log("Submitting to endpoint:", endpoint); // Debug log
+
+            const body = isLogin
+                ? new URLSearchParams({
+                    username: formData.roll_number,
+                    password: formData.password
+                })
+                : JSON.stringify({
+                    roll_number: formData.roll_number,
+                    password: formData.password,
+                    name: formData.name
+                });
+
+            const headers = isLogin
+                ? { 'Content-Type': 'application/x-www-form-urlencoded' }
+                : { 'Content-Type': 'application/json' };
+
+            const response = await fetch(`http://localhost:8000${endpoint}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                headers: headers,
+                body: isLogin ? body.toString() : body,
             });
 
             const data = await response.json();
+            console.log("Response data:", data); // Debug log
 
-            if (response.ok) {
-                if (isLogin) {
-                    const studentInfo = {
-                        student_id: data.student_id,
-                        name: data.name,
-                        roll_number: data.roll_number,
-                    };
+            if (!response.ok) throw new Error(data.detail || 'Authentication failed');
 
-                    localStorage.setItem('studentInfo', JSON.stringify(studentInfo));
-                    setStudentData(studentInfo);
-                    setSuccess('Login successful!');
-                } else {
-                    setSuccess('Signup successful!');
-                }
+            if (isLogin) {
+                localStorage.setItem('auth_token', data.access_token);
+                localStorage.setItem('user_role', 'student');
+                onLoginSuccess(data);
+                toast.success('Login successful!');
             } else {
-                setError(data.message || 'An error occurred');
+                toast.success('Registration successful! Please login.');
+                setIsLogin(true);
             }
-        } catch (err) {
-            setError('Network error occurred');
+        } catch (error) {
+            console.error("Auth error:", error); // Debug log
+            toast.error(error.message);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleInputChange = (e) => {
+    const handleChange = (e) => {
         setFormData(prev => ({
             ...prev,
             [e.target.name]: e.target.value
         }));
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('studentInfo');
-        setStudentData(null);
-    };
-
-    if (studentData) {
-        return <StudentAttendance studentData={studentData} onLogout={handleLogout} />;
-    }
-
+    // Add a visual test element
     return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-            <div className="w-full max-w-md bg-white rounded-lg shadow-md p-6">
-                <div className="mb-6">
-                    <h2 className="text-2xl font-bold mb-2">{isLogin ? 'Student Login' : 'Student Signup'}</h2>
-                    <p className="text-gray-600">
-                        {isLogin ? 'Welcome back! Please login to continue.' : 'Create your student account'}
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-lg">
+                <div>
+                    <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
+                        {isLogin ? 'Student Sign In' : 'Student Registration'}
+                    </h2>
+                    <p className="mt-2 text-center text-sm text-gray-600">
+                        {isLogin ? "Don't have an account?" : "Already have an account?"}
+                        <button
+                            onClick={() => setIsLogin(!isLogin)}
+                            className="ml-1 font-medium text-purple-600 hover:text-purple-500"
+                        >
+                            {isLogin ? 'Register here' : 'Sign in'}
+                        </button>
                     </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {!isLogin && (
+                <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+                    <div className="rounded-md shadow-sm space-y-4">
+                        {!isLogin && (
+                            <div>
+                                <label htmlFor="name" className="sr-only">Full Name</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <User className="h-5 w-5 text-gray-400" />
+                                    </div>
+                                    <input
+                                        id="name"
+                                        name="name"
+                                        type="text"
+                                        required
+                                        value={formData.name}
+                                        onChange={handleChange}
+                                        className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm"
+                                        placeholder="Full Name"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         <div>
-                            <label className="block text-sm font-medium mb-1">Name</label>
-                            <input
-                                type="text"
-                                name="name"
-                                value={formData.name}
-                                onChange={handleInputChange}
-                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                                required
-                            />
+                            <label htmlFor="roll_number" className="sr-only">Roll Number</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Hash className="h-5 w-5 text-gray-400" />
+                                </div>
+                                <input
+                                    id="roll_number"
+                                    name="roll_number"
+                                    type="text"
+                                    required
+                                    value={formData.roll_number}
+                                    onChange={handleChange}
+                                    className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm"
+                                    placeholder="Roll Number"
+                                />
+                            </div>
                         </div>
-                    )}
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Roll Number</label>
-                        <input
-                            type="text"
-                            name="roll_number"
-                            value={formData.roll_number}
-                            onChange={handleInputChange}
-                            className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required
-                        />
+                        <div>
+                            <label htmlFor="password" className="sr-only">Password</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Lock className="h-5 w-5 text-gray-400" />
+                                </div>
+                                <input
+                                    id="password"
+                                    name="password"
+                                    type="password"
+                                    required
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500 focus:z-10 sm:text-sm"
+                                    placeholder="Password"
+                                />
+                            </div>
+                        </div>
                     </div>
-
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Password</label>
-                        <input
-                            type="password"
-                            name="password"
-                            value={formData.password}
-                            onChange={handleInputChange}
-                            className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required
-                        />
-                    </div>
-
-                    {error && (
-                        <div className="bg-red-50 text-red-700 p-3 rounded-lg">
-                            {error}
-                        </div>
-                    )}
-
-                    {success && (
-                        <div className="bg-green-50 text-green-700 p-3 rounded-lg">
-                            {success}
-                        </div>
-                    )}
 
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                        className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
                     >
-                        {loading ? 'Processing...' : (isLogin ? 'Login' : 'Sign Up')}
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => setIsLogin(!isLogin)}
-                        className="w-full text-sm text-gray-600 hover:text-gray-800"
-                    >
-                        {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Login'}
+                        <span className="absolute left-0 inset-y-0 flex items-center pl-3">
+                            {isLogin ? <LogIn className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
+                        </span>
+                        {loading ? 'Please wait...' : (isLogin ? 'Sign in' : 'Register')}
                     </button>
                 </form>
             </div>
